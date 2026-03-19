@@ -1,6 +1,36 @@
 # Development Guide - Command Console Mod
 
+⚠️ **重要提示**：请先阅读 [ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md)（快速概览）和 [ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)（详细分析），了解当前实现的根本性问题。
+
 This document explains the technical design, architecture, and implementation details of the Command Console mod.
+
+## 快速导航
+
+- **[ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md)** - 🚨 架构问题概览（快速入门）
+- **[ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)** - ⚠️ 当前架构问题详细分析（必读）
+- **[PROJECT_ARCHITECTURE_PLAN.md](PROJECT_ARCHITECTURE_PLAN.md)** - 长期改进规划
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - 贡献指南
+- **[DEVELOPMENT_MANAGEMENT.md](DEVELOPMENT_MANAGEMENT.md)** - 开发规范
+- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - 完整文档导航
+
+## 已知问题
+
+当前实现存在以下问题（计划在 v1.1 重构时解决）：
+
+1. **架构不符合网络游戏最佳实践**  
+   - 客户端执行服务端逻辑（应该由服务端中心化执行）
+   - 客户端可以修改过滤逻辑（安全隐患）
+   - 见 [ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)
+
+2. **当前设计的工作范围**  
+   - ✅ 房主模式（玩家直接加入房主游戏）工作正常
+   - ❌ 专用服务端需要重新设计
+   - ❌ 权限系统无法安全实现
+
+3. **v1.1 规划的改进**  
+   - 将命令执行移到服务端/房主
+   - 客户端只显示结果
+   - 真正的中心化管理
 
 ## Table of Contents
 
@@ -365,16 +395,20 @@ This is a standard multiplayer pattern (client-side filtering).
 
 ## Future Improvements
 
-### Planned
-- [ ] Implement `/set` and `/speed` commands (framework exists)
-- [ ] Add permission levels (admin-only commands)
-- [ ] Command aliases and shortcuts
-- [ ] Command history in chat memory
+### Currently Planned (v1.1 - v2.0)
+- [ ] Implement `/set` command - Modify map settings (v1.1)
+- [ ] Add permission levels (admin-only commands) (v1.3)
+- [ ] Command aliases and shortcuts (v1.2)
+- [ ] Command history in chat memory (v2.0)
 
-### Architecture Considerations
-- Consider moving command definitions to separate `commands/` directory
+### Architecture Considerations for Future
+- Consider moving command definitions to separate `commands/` directory for easier modular additions
 - May want a Lua config file for user-customizable commands
 - Consider persistent command history/logging to file
+- Permission system could use a simple role-based system (admin/user)
+
+### Known TODO in Code
+- Comment with "TODO:" marks in `simulation/main.lua` indicate placeholder command handlers ready for implementation
 
 ---
 

@@ -161,49 +161,109 @@ end)
 -- 聊天消息拦截 - 核心函数
 -- ============================================================================
 -- 在 Simulation 层拦截聊天消息并执行命令
--- 直接调用 UI.Run 让游戏正常的 Chat.Text 处理
+-- 支持两种环境：
+-- 1. 客户端：hook UI.Run()，结果通过UI层过滤显示
+-- 2. 服务端：hook Chat.Text()，在后台显示结果
 
-local original_ui_run = UI.Run
+-- 检测环境：是否为服务端（服务端没有UI.Run）
+local is_dedicated_server = not (UI and UI.Run)
 
--- 劫持 UI.Run 来拦截 OnReceivedChat 消息
-function UI.Run(func_name, ...)
-    if func_name == "OnReceivedChat" then
-        local arg = select(1, ...)
-        if arg and arg.txt and arg.player_id ~= nil then
+if is_dedicated_server then
+    print("[CmdServerMod] 检测到专用服务端环境")
+    
+    -- ========================================================================
+    -- 服务端模式：直接 hook Chat.Text()
+    -- ========================================================================
+    -- Chat.Text() 是游戏中最底层的聊天处理函数
+    -- 主 UI 的 TextChat.lua 会定义它，但在服务端会尝试调用 UI.Run，导致崩溃
+    -- 我们在 Simulation 加载时覆盖它，以正确处理服务端的聊天
+    
+    local original_chat_text = Chat.Text
+    
+    function Chat.Text(arg, player_id)
+        if arg and arg.txt then
             local message = arg.txt
-            local player_id = arg.player_id
             
-            -- 在日志中记录所有玩家的聊天
-            print("[CHAT-LOG] 玩家" .. tostring(player_id) .. ": " .. message)
+            -- 在服务端后台显示所有玩家的输入
+            print("[SERVER-INPUT] 玩家" .. tostring(player_id) .. ": " .. message)
             
             -- 尝试作为命令执行
             local is_command, cmd_result = execute_command(message, player_id)
             
             if is_command then
-                -- 是命令，结果用特殊标记发送，UI层会根据标记决定谁能看到
-                print("[CMD-EXECUTED] 玩家" .. tostring(player_id) .. " 执行命令: " .. message)
-                
-                -- 修改消息标记，UI层会识别并仅在目标玩家显示
-                arg.txt = "[CMD_RESULT:" .. tostring(player_id) .. "] " .. cmd_result
-                print("[CMD-MSG] 已发送命令结果给UI层")
-                -- 继续传递修改后的消息
-                return original_ui_run(func_name, arg)
+                -- 是命令，在服务端后台显示结果
+                print("[SERVER-CMD] 玩家" .. tostring(player_id) .. " 执行命令: " .. message)
+                print("[SERVER-CMD] 命令结果:")
+                for line in cmd_result:gmatch("[^\n]+") do
+                    print("[SERVER-CMD]   " .. line)
+                end
+                -- 不继续传播到客户端（直接返回）
+                return
             else
-                -- 不是命令，正常处理
-                print("[CHAT-PASS] 玩家" .. tostring(player_id) .. " 的聊天已放行")
-                return original_ui_run(func_name, arg)
+                -- 不是命令，是普通聊天
+                -- 在服务端，普通聊天也只显示在后台，不需要进一步处理
+                print("[SERVER-CHAT] 玩家" .. tostring(player_id) .. " 的聊天已记录")
+                return
             end
         end
     end
-    -- 对于其他函数，直接调用原始 UI.Run
-    return original_ui_run(func_name, ...)
+    
+    print("[CmdServerMod] 服务端聊天处理器已激活")
+    
+else
+    print("[CmdServerMod] 检测到客户端环境")
+    
+    -- ========================================================================
+    -- 客户端模式：hook UI.Run()（原有逻辑）
+    -- ========================================================================
+    
+    local original_ui_run = UI.Run
+    
+    -- 劫持 UI.Run 来拦截 OnReceivedChat 消息
+    function UI.Run(func_name, ...)
+        if func_name == "OnReceivedChat" then
+            local arg = select(1, ...)
+            if arg and arg.txt and arg.player_id ~= nil then
+                local message = arg.txt
+                local player_id = arg.player_id
+                
+                -- 在日志中记录所有玩家的聊天
+                print("[CHAT-LOG] 玩家" .. tostring(player_id) .. ": " .. message)
+                
+                -- 尝试作为命令执行
+                local is_command, cmd_result = execute_command(message, player_id)
+                
+                if is_command then
+                    -- 是命令，结果用特殊标记发送，UI层会根据标记决定谁能看到
+                    print("[CMD-EXECUTED] 玩家" .. tostring(player_id) .. " 执行命令: " .. message)
+                    
+                    -- 修改消息标记，UI层会识别并仅在目标玩家显示
+                    arg.txt = "[CMD_RESULT:" .. tostring(player_id) .. "] " .. cmd_result
+                    print("[CMD-MSG] 已发送命令结果给UI层")
+                    -- 继续传递修改后的消息
+                    return original_ui_run(func_name, arg)
+                else
+                    -- 不是命令，正常处理
+                    print("[CHAT-PASS] 玩家" .. tostring(player_id) .. " 的聊天已放行")
+                    return original_ui_run(func_name, arg)
+                end
+            end
+        end
+        -- 对于其他函数，直接调用原始 UI.Run
+        return original_ui_run(func_name, ...)
+    end
+    
+    print("[CmdServerMod] 客户端聊天处理器已激活")
 end
 
 -- ============================================================================
 -- 初始化
 -- ============================================================================
 
-print("[CmdServerMod] 命令台模组已加载!")
-print("[CmdServerMod] UI.Run 处理器已激活")
-print("[CmdServerMod] 可以在游戏聊天中输入命令了，例如: /help")
+if is_dedicated_server then
+    print("[CmdServerMod] 模组已加载（服务端模式）")
+else
+    print("[CmdServerMod] 模组已加载（客户端模式）")
+    print("[CmdServerMod] 可以在游戏聊天中输入命令了，例如: /help")
+end
 

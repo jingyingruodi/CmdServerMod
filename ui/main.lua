@@ -1,11 +1,13 @@
 -- Desynced Command Console - UI Module
 -- 在UI层拦截 OnReceivedChat 消息，处理命令结果的显示
 
--- 保存原始的 UIMsg.OnReceivedChat 处理器
-local original_on_received_chat = UIMsg and UIMsg.OnReceivedChat
+-- 安全检查：服务端没有 UI 系统，此模块不应在服务端运行
+if not UI or not UI.Run then
+    print("[CmdServerMod UI] 检测到服务端环境，UI 模块已禁用")
+    return
+end
 
--- 使用 UI.Run 来拦截 OnReceivedChat 调用
--- 这是游戏允许的正确方式
+-- 保存原始的 UI.Run 处理器
 local original_ui_run = UI.Run
 
 function UI.Run(func_name, ...)
@@ -42,4 +44,4 @@ function UI.Run(func_name, ...)
     return original_ui_run(func_name, ...)
 end
 
-print("[CmdServerMod UI] UI模块已加载")
+print("[CmdServerMod UI] UI 模块已加载")

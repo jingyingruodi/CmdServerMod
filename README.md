@@ -4,6 +4,9 @@ English | [中文](#中文)
 
 A multiplayer-friendly in-game command system for Desynced. Execute commands via the chat interface with private command result feedback—only the command sender sees their own results.
 
+**📊 项目全景**：查看 [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)  
+**📚 快速导航**：新手？请查看 [QUICK_REFERENCE.md](QUICK_REFERENCE.md) 找到合适的文档。
+
 ## Features
 
 - 🎮 **Chat-integrated commands**: Type commands directly in the game chat (`/help`, `/test`, `/settings`, `/info`)
@@ -27,6 +30,8 @@ A multiplayer-friendly in-game command system for Desynced. Execute commands via
 
 ### Available Commands
 
+### Currently Implemented Commands ✅
+
 #### `/help` - Show all commands
 ```
 /help                    # List all available commands
@@ -49,6 +54,10 @@ A multiplayer-friendly in-game command system for Desynced. Execute commands via
 /info                    # Display current game info (tick, days, year, sunrise/sunset)
 ```
 
+### Planned Commands (Coming in Future Versions) 📋
+
+- `/set <key> <value>` - Modify map settings (v1.1 planned)
+
 ### Usage Example
 
 In any multiplayer game, press `K` (default) or click the chat icon to open chat:
@@ -61,6 +70,19 @@ Output (private): "测试命令已执行!"
 ↓
 Output (private): Shows all available commands
 ```
+
+## ⚠️ Architecture Notice
+
+🚨 **重要**: 项目存在架构问题。详见 [ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md)
+
+当前实现使用**客户端过滤**模式（每个客户端执行逻辑），这与现代网络游戏的最佳实践不符。v1.1 将修复此问题。
+
+- 🟢 在**房主模式**下正常工作
+- 🔴 在**专用服务端**下存在严重问题
+
+更多信息请参阅 [ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md) 和 [ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)。
+
+---
 
 ## Architecture
 
@@ -81,10 +103,10 @@ The mod works in two layers:
 - Normal chat messages pass through unchanged
 
 **Why this design?**
-- Commands must be executed server-side (Simulation)
-- Results must be filtered client-side (UI)
-- Each player's chat only shows their own results → no spoilers/privacy violation
-- Normal chat is completely unaffected
+- Commands are executed in Simulation (runs on all clients in current design)
+- Results are filtered client-side (UI layer)
+- Each player's chat only shows their own results
+- **NOTE**: This design has limitations. See [ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md) for details.
 
 ## Extending the Mod
 
@@ -125,7 +147,7 @@ CmdServerMod/
 - ✅ Core command system operational
 - ✅ Private command result filtering (multiplayer-safe)
 - ✅ Basic commands: `/help`, `/test`, `/settings`, `/info`
-- ⚠️ Placeholder for `/set`, `/speed` commands (framework present, implementation pending)
+- ⚠️ Placeholder for `/set` command (framework present, implementation pending)
 
 ### v1.0 (Earlier)
 - Initial command framework
@@ -139,13 +161,9 @@ CmdServerMod/
 - Some settings changes may require map reload to take effect
 
 ### Planned Features
-- [ ] Command aliases & macros
-- [ ] Permission levels (admin-only commands)
-- [ ] Command history & autocomplete
-- [ ] Simple UI overlay for command palette
-- [ ] Log file recording of command history
-- [ ] Configuration preset system
-- [ ] `/set` and `/speed` command implementation
+- [ ] **v1.1**: `/set` command
+- [ ] **v1.3**: Permission levels (admin-only commands)
+- [ ] **v2.0**: GUI command palette, command history, presets
 
 ## Troubleshooting
 
@@ -204,7 +222,7 @@ MIT License - See LICENSE file
 
 ## 快速开始
 
-### 可用命令
+### 已实现的命令 ✅
 
 ```
 /help                   # 显示所有命令
@@ -212,6 +230,10 @@ MIT License - See LICENSE file
 /settings               # 查看地图设置
 /info                   # 显示游戏信息
 ```
+
+### 规划中的命令（未来版本）📋
+
+- `/set <key> <value>` - 修改地图设置（v1.1 计划）
 
 使用示例：按 `K` 打开聊天，输入 `/test`，只有你能看到结果。
 
@@ -230,15 +252,37 @@ MIT License - See LICENSE file
 
 ## 版本
 
-**v1.0.1** (2026-03-19)
+**v1.0.2** (2026-03-20)
 - ✅ 核心命令系统工作
 - ✅ 私聊过滤（多人安全）
 - ✅ 基础命令：`/help`、`/test`、`/settings`、`/info`
+- ✅ 双端兼容（客户端+服务端）
 
 ## 许可证
 
 MIT
 
+## 相关文档
+
+### 对于用户
+- 本文档（README.md）- 项目概览和快速开始
+
+### 对于开发者
+- **[DEVELOPMENT.md](DEVELOPMENT.md)** - 架构说明和开发入门
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - 贡献指南和代码标准
+- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - 完整文档导航
+
+### 对于架构师和高级开发者
+- **[ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)** - 当前架构问题的深度分析 ⚠️ 重要
+- **[PROJECT_ARCHITECTURE_PLAN.md](PROJECT_ARCHITECTURE_PLAN.md)** - 长期规划和版本路线
+- **[DEVELOPMENT_MANAGEMENT.md](DEVELOPMENT_MANAGEMENT.md)** - 开发规范和最佳实践
+
+### 当前已知问题
+- ⚠️ 架构设计存在根本性问题（见 [ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)）
+- 当前实现在房主模式下工作，但不符合现代网络游戏的最佳实践
+- 计划在 v1.1 进行架构重构
+
 ## 贡献
 
 欢迎提交 Pull Request！见 `CONTRIBUTING.md`。
+

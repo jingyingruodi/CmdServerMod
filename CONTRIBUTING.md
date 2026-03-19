@@ -1,5 +1,7 @@
 # Contributing to Command Console Mod
 
+⚠️ **Before contributing**, please read [ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md) to understand current limitations and architectural issues.
+
 Thank you for your interest in contributing! This guide explains how to contribute code, report issues, and work with the project.
 
 ## Table of Contents
@@ -46,12 +48,20 @@ Thank you for your interest in contributing! This guide explains how to contribu
 
 3. **Read the docs**:
    - README.md (user perspective)
+   - [ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md) (architecture overview)
    - DEVELOPMENT.md (technical architecture)
    - EXTENSION_GUIDE.lua (code examples)
 
 ---
 
 ## Development Workflow
+
+### Important Notes on Architecture
+
+- ⚠️ Current implementation uses **client-filtering** architecture
+- 🔴 **Do NOT implement** permission/admin features without fixing architecture first
+- 💡 See [ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md) and [ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md) for details
+- 🚀 v1.1 will fix architecture issues - coordinate with maintainers before starting permission work
 
 ### Branch Strategy
 
