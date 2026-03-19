@@ -1,7 +1,11 @@
-# 忽略开发文档和网页相关文件
+# 忽略游戏引用文件
+Desynced Lua API.html
 Modding - Desynced Wiki.html
 Modding - Desynced Wiki_files/
-Desynced Lua API.html
+TextChat_reference.lua
+
+# 忽略主体源代码提取目录（仅本地参考）
+main_extracted/
 
 # 日志文件
 日志.log
@@ -17,3 +21,8 @@ Thumbs.db
 *.swp
 *.swo
 *~
+*.bak
+
+# 项目特定
+.DS_Store/
+*.tmp

@@ -1,10 +1,10 @@
 {
-    "id": "CmdSettingsMod",
+    "id": "CmdServerMod",
     "name": "Command Console",
     "author": "镜影若滴",
-    "version_name": "1.0",
-    "version_code": 1,
-    "description": "Change game settings via chat using commands like /help, /settings, /set, /speed, /info",
+    "version_name": "1.0.1",
+    "version_code": 2,
+    "description": "In-game chat command system with private command result feedback. Execute game commands via /help, /test, /settings, /info, etc.",
 
     "packages": {
         "UI": {

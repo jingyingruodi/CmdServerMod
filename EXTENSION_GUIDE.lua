@@ -99,7 +99,7 @@ register_command("preset", "管理设置预设", "<save|load|list> <名称>", fu
     end
     
     local action = args[1]:lower()
-    local mod_data = Map.GetSave("CmdSettingsMod")
+    local mod_data = Map.GetSave("CmdServerMod")
     
     if not mod_data.presets then
         mod_data.presets = {}
@@ -225,7 +225,7 @@ local decoded = Tool.StringToTable(encoded)
 3. 条件断点（通过命令）：
    register_command("debug", "调试命令", "", function(args, sender_id)
        -- 检查内部状态
-       local mod_data = Map.GetSave("CmdSettingsMod")
+       local mod_data = Map.GetSave("CmdServerMod")
        print("[DEBUG] " .. Tool.TableToString(mod_data))
    end)
 

@@ -1,206 +1,244 @@
-# Desynced 命令台模组 (Command Console Mod)
+# Desynced Command Console Mod
 
-## 简介
+English | [中文](#中文)
 
-这是一个为 Desynced 游戏开发的命令行模组，允许玩家通过游戏内置的聊天系统使用文本命令来修改地图参数和游戏设置。
+A multiplayer-friendly in-game command system for Desynced. Execute commands via the chat interface with private command result feedback—only the command sender sees their own results.
 
-## 功能
+## Features
 
-- **地图设置查看和修改**: 查看所有可用的地图设置，或修改特定的设置
-- **游戏速度控制**: 查看和修改游戏模拟的速度
-- **游戏信息显示**: 查看当前的游戏时间、日期、年份等信息
-- **地图种子查询**: 查看或修改地图生成种子
-- **帮助系统**: 内置的命令帮助系统
+- 🎮 **Chat-integrated commands**: Type commands directly in the game chat (`/help`, `/test`, `/settings`, `/info`)
+- 🔒 **Private command results**: Each player only sees their own command output (not broadcasted to others)
+- 🛠️ **Extensible system**: Easy to add new commands via simple registration API
+- 📊 **Game info access**: Query map settings, current game tick, day/year info
+- ✅ **Error handling**: Graceful command failures with user-friendly error messages
+- 🎯 **Multi-player safe**: Works correctly in multiplayer sessions without interfering with normal chat
 
-## 安装
+## Installation
 
-1. 将此模组放在 Desynced 的 mods 文件夹中
-2. 在游戏中启用此模组
-3. 开始新的游戏或在现有游戏中使用
+1. Extract this mod into your Desynced mods folder:
+   - **Windows**: `%AppData%/Local/Desynced/Mods/`
+   - **Steam**: `<Steam>/steamapps/common/Desynced/Desynced/Content/mods/`
 
-## 使用方法
+2. Launch Desynced and enable "Command Console" in mod list
 
-所有命令都以 `/` 前缀开头，在聊天栏中输入。
+3. Start a new game or load existing game
 
-### 基础命令
+## Quick Start
 
-#### `/help` - 显示帮助
-显示所有可用的命令列表。
+### Available Commands
+
+#### `/help` - Show all commands
 ```
-/help                  # 显示所有命令
-/help <命令名>         # 显示特定命令的帮助
-```
-
-#### `/settings` - 查看地图设置
-查看当前的地图设置。
-```
-/settings              # 显示所有设置
-/settings <设置名>     # 显示特定设置
+/help                    # List all available commands
+/help <command>          # Show detailed help for a command
 ```
 
-**常用地图设置:**
-- `seed` - 地图生成种子
-- `blight_threshold` - 污染阈值
-- `pollution_limit` - 污染限制
-- 其他根据场景的具体设置
-
-#### `/set` - 修改地图设置
-修改地图的具体设置。
+#### `/test` - Test command
 ```
-/set <设置名> <值>
+/test                    # Simple test to verify mod is working
 ```
 
-**示例:**
+#### `/settings` - View map settings
 ```
-/set seed 12345                    # 设置地图种子
-/set blight_threshold 0.5          # 设置污染阈值
-/set pollution_limit 100           # 设置污染限制
-```
-
-#### `/speed` - 游戏速度
-查看或修改游戏速度（模拟倍速）。
-```
-/speed                 # 查看当前游戏速度
-/speed <倍速值>        # 设置游戏速度
+/settings                # Show all map settings
+/settings <key>          # Show specific setting value
 ```
 
-**示例:**
+#### `/info` - Game information
 ```
-/speed                 # 显示当前速度
-/speed 1              # 正常速度
-/speed 2              # 2倍速
-/speed 0.5            # 0.5倍速（慢速）
+/info                    # Display current game info (tick, days, year, sunrise/sunset)
 ```
 
-#### `/info` - 游戏信息
-显示当前游戏的相关信息。
-```
-/info
-```
+### Usage Example
 
-显示的信息包括:
-- 当前游戏的 Tick 数
-- 已过天数
-- 当前年份
-- 日出和日落时间
-
-#### `/seed` - 地图种子
-查看或修改地图的生成种子。
+In any multiplayer game, press `K` (default) or click the chat icon to open chat:
 ```
-/seed              # 查看当前种子
-/seed <新种子>    # 设置新种子
+/test
+↓
+Output (private): "测试命令已执行!"
+
+/help
+↓
+Output (private): Shows all available commands
 ```
 
-**注意:** 修改种子后可能需要重新加载地图才能生效。
+## Architecture
 
-#### `/version` - 版本信息
-显示模组的版本信息。
-```
-/version
-```
+The mod works in two layers:
 
-## 使用示例
+### Simulation Layer (`simulation/main.lua`)
+- Intercepts chat messages via `UI.Run("OnReceivedChat")`
+- Parses command prefix (`/`)
+- Executes registered commands
+- Marks results with `[CMD_RESULT:player_id]` tag
+- Returns result only to the command executor
 
-### 示例 1: 基本使用流程
-```
-/help                        # 查看可用命令
-/info                        # 检查当前游戏进度
-/settings                    # 查看所有可用设置
-/settings seed              # 查看地图种子
-```
+### UI Layer (`ui/main.lua`)
+- Re-intercepts `UI.Run("OnReceivedChat")`
+- Detects `[CMD_RESULT:player_id]` messages
+- Uses `Game.IsLocalPlayer(player_id)` to filter
+- **Only displays results to the target player**
+- Normal chat messages pass through unchanged
 
-### 示例 2: 修改游戏速度进行快速建设
-```
-/speed 2                     # 设置 2 倍速
-# 进行快速建设...
-/speed 1                     # 恢复正常速度
-```
+**Why this design?**
+- Commands must be executed server-side (Simulation)
+- Results must be filtered client-side (UI)
+- Each player's chat only shows their own results → no spoilers/privacy violation
+- Normal chat is completely unaffected
 
-### 示例 3: 调整地图参数
-```
-/settings blight_threshold   # 查看污染阈值
-/set blight_threshold 0.7    # 提高污染阈值
-/info                        # 验证设置
-```
+## Extending the Mod
 
-## 技术细节
+To add new commands, edit `simulation/main.lua` and add:
 
-### 架构
-- **模块化设计**: 命令通过统一的处理系统管理
-- **类型检测**: 自动识别设置的数据类型（布尔值、数值、字符串）
-- **错误处理**: 完善的错误提示和异常捕获
-
-### 支持的设置类型
-- **布尔值**: 接受 true/false、yes/no、1/0、on/off
-- **数值**: 整数和浮点数
-- **字符串**: 直接传递
-
-### 消息系统
-模组使用 Desynced 的聊天系统来：
-1. 拦截以 `/` 开头的消息
-2. 解析命令和参数
-3. 执行相应的操作
-4. 返回执行结果
-
-## 文件结构
-
-```
-CmdSettingsMod/
-├── def.json                 # 模组定义文件
-├── simulation/
-│   └── main.lua            # 主模块代码
-└── README.md               # 本文件
+```lua
+register_command("mycommand", "Description", "[args]", function(args)
+    output_to_chat("Your command executed!")
+end)
 ```
 
-## 已知限制
+See `EXTENSION_GUIDE.lua` for detailed examples.
 
-1. **聊天消息处理**: 命令拦截依赖于游戏的聊天系统实现
-2. **权限限制**: 所有玩家都可以执行命令（未来可添加权限系统）
-3. **实时反馈**: 某些设置的修改可能需要游戏重新加载或重启才能生效
+## Development
 
-## 扩展可能性
+### Project Structure
+```
+CmdServerMod/
+├── def.json                 # Mod metadata
+├── simulation/main.lua      # Command engine & execution (191 lines)
+├── ui/main.lua             # UI filtering layer (41 lines)
+├── README.md               # This file
+├── DEVELOPMENT.md          # Architecture details
+├── CONTRIBUTING.md         # Contribution guidelines (TODO)
+└── docs/
+    └── architecture.md     # Detailed flow diagrams (TODO)
+```
 
-未来可以添加的功能：
-- [ ] 权限系统（仅某些玩家可执行命令）
-- [ ] 命令配置文件
-- [ ] 命令宏/脚本支持
-- [ ] 更多游戏参数的控制
-- [ ] UI 界面（配置窗口）
-- [ ] 命令历史记录
+### Code Quality
+- **Lua**: ~230 total lines (production code)
+- **Error handling**: All commands wrapped in `pcall()` for safety
+- **Logging**: Debug logs prefixed with `[CmdServerMod]` and `[CMD-*]`
+- **Testing**: Manual testing in single/multiplayer games
 
-## 故障排除
+## Version History
 
-### 命令无效
-- 检查命令前缀是否正确（应为 `/`）
-- 使用 `/help` 查看确切的命令名称和格式
-- 确保模组已正确加载
+### v1.0.1 (2026-03-19)
+- ✅ Core command system operational
+- ✅ Private command result filtering (multiplayer-safe)
+- ✅ Basic commands: `/help`, `/test`, `/settings`, `/info`
+- ⚠️ Placeholder for `/set`, `/speed` commands (framework present, implementation pending)
 
-### 设置无法修改
-- 确认设置名称正确（使用 `/settings` 查看）
-- 检查值的类型是否正确
-- 某些设置可能在游戏运行时无法修改
+### v1.0 (Earlier)
+- Initial command framework
 
-### 游戏速度修改无效
-- 设置的速度值应为非负数
-- 检查当前游戏是否允许修改速度
+## Known Limitations & Future Work
 
-## 版本历史
+### Current Limitations
+- No permission/admin system (all players can execute all commands)
+- Text-only interface (no GUI)
+- Limited command set (extensible but currently only `/test`, `/help`, `/settings`, `/info`)
+- Some settings changes may require map reload to take effect
 
-### v1.0 (当前)
-- 初始版本
-- 支持基本的设置查看和修改
-- 游戏速度控制
-- 游戏信息显示
-- 完整的帮助系统
+### Planned Features
+- [ ] Command aliases & macros
+- [ ] Permission levels (admin-only commands)
+- [ ] Command history & autocomplete
+- [ ] Simple UI overlay for command palette
+- [ ] Log file recording of command history
+- [ ] Configuration preset system
+- [ ] `/set` and `/speed` command implementation
 
-## 许可证
+## Troubleshooting
 
-本模组是为 Desynced 游戏开发的社区模组。
+**Q: Commands not showing up?**
+- Ensure mod is enabled in mod list
+- Try `/help` to verify mod loaded
+- Check game log for errors (look for `[CmdServerMod]` prefix)
 
-## 联系方式
+**Q: Why can't other players see my command results?**
+- By design! Results are private to prevent spam/confusion. Only you see your output.
+- Normal chat messages are still broadcasted normally.
 
-如有问题或建议，欢迎反馈。
+**Q: Does this affect normal chat?**
+- No. Messages that don't start with `/` are processed normally.
+
+## Contributing
+
+We welcome contributions! Please see `CONTRIBUTING.md` for:
+- Code style guidelines
+- Pull request process
+- Testing requirements
+- AI-assisted development notes
+
+## License
+
+MIT License - See LICENSE file
+
+## Support
+
+- Report bugs: GitHub Issues
+- Suggestions: GitHub Discussions
+- Questions: README FAQ section
 
 ---
 
-祝您游戏愉快！使用 `/help` 开始吧。
+# 中文
+
+## Desynced 命令台模组
+
+一个多人友好的 Desynced 游戏内命令系统。通过聊天界面执行命令，命令结果只有发送者能看到（私聊风格）。
+
+## 功能
+
+- 🎮 **聊天集成命令**：在游戏聊天中输入命令（`/help`、`/test`、`/settings`、`/info`）
+- 🔒 **私聊命令反馈**：每个玩家只看到自己的命令输出（不广播给其他人）
+- 🛠️ **易扩展系统**：通过简单的注册 API 添加新命令
+- 📊 **游戏信息访问**：查询地图设置、游戏 Tick、天数/年份
+- ✅ **错误处理**：友好的命令错误提示
+- 🎯 **多人安全**：支持多人模式，不影响正常聊天
+
+## 安装
+
+1. 解压至 Desynced mods 文件夹
+2. 在游戏中启用"Command Console"
+3. 开始游戏
+
+## 快速开始
+
+### 可用命令
+
+```
+/help                   # 显示所有命令
+/test                   # 测试命令
+/settings               # 查看地图设置
+/info                   # 显示游戏信息
+```
+
+使用示例：按 `K` 打开聊天，输入 `/test`，只有你能看到结果。
+
+## 架构
+
+**Simulation 层** (`simulation/main.lua`)
+- 拦截聊天消息，检测 `/` 前缀
+- 执行命令，标记结果为 `[CMD_RESULT:player_id]`
+
+**UI 层** (`ui/main.lua`)
+- 再次拦截聊天消息
+- 用 `Game.IsLocalPlayer()` 过滤
+- **只显示目标玩家的结果**
+
+这样保证了多人游戏中的隐私性和安全性。
+
+## 版本
+
+**v1.0.1** (2026-03-19)
+- ✅ 核心命令系统工作
+- ✅ 私聊过滤（多人安全）
+- ✅ 基础命令：`/help`、`/test`、`/settings`、`/info`
+
+## 许可证
+
+MIT
+
+## 贡献
+
+欢迎提交 Pull Request！见 `CONTRIBUTING.md`。
