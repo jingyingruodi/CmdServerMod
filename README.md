@@ -48,5 +48,5 @@ A robust server-side command and authority management framework for Desynced. De
 - `ui/main.lua`: UI interceptor, handles input capture and secure action dispatching.
 - `AI_RULES.md`: Guidelines for future AI contributors to prevent project clutter.
 
-**Author**: 镜影若滴  
+**Author**: jingyingruodi(镜影若滴)
 **License**: MIT
