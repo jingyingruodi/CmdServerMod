@@ -1,423 +1,54 @@
-# Development Guide - Command Console Mod
+# Command Console - 开发者技术文档 (v1.6.3)
 
-⚠️ **重要提示**：请先阅读 [ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md)（快速概览）和 [ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)（详细分析），了解当前实现的根本性问题。
+[English](#english) | [中文](#中文)
 
-This document explains the technical design, architecture, and implementation details of the Command Console mod.
+## 🏗️ 架构设计 (Architecture)
 
-## 快速导航
+本项目采用 **UI-Simulation 双层解耦架构**，以确保在多人游戏和专用服务器（Dedicated Server）环境下的绝对稳定性。
 
-- **[ARCHITECTURE_WARNING.md](ARCHITECTURE_WARNING.md)** - 🚨 架构问题概览（快速入门）
-- **[ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)** - ⚠️ 当前架构问题详细分析（必读）
-- **[PROJECT_ARCHITECTURE_PLAN.md](PROJECT_ARCHITECTURE_PLAN.md)** - 长期改进规划
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** - 贡献指南
-- **[DEVELOPMENT_MANAGEMENT.md](DEVELOPMENT_MANAGEMENT.md)** - 开发规范
-- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - 完整文档导航
+### 1. UI 层 (`ui/main.lua`)
+- **职责**：本地输入拦截、身份标记、动作封装。
+- **关键技术**：
+    - Hook `UI.SendChatGlobal` 拦截所有文本输入。
+    - 使用 `Action.SendForLocalFaction` 将捕获到的内容同步给服务端。
+    - **禁止**在 UI 层直接执行管理逻辑，所有指令必须由服务器确认。
 
-## 已知问题
-
-当前实现存在以下问题（计划在 v1.1 重构时解决）：
-
-1. **架构不符合网络游戏最佳实践**  
-   - 客户端执行服务端逻辑（应该由服务端中心化执行）
-   - 客户端可以修改过滤逻辑（安全隐患）
-   - 见 [ARCHITECTURE_PROBLEMS_ANALYSIS.md](ARCHITECTURE_PROBLEMS_ANALYSIS.md)
-
-2. **当前设计的工作范围**  
-   - ✅ 房主模式（玩家直接加入房主游戏）工作正常
-   - ❌ 专用服务端需要重新设计
-   - ❌ 权限系统无法安全实现
-
-3. **v1.1 规划的改进**  
-   - 将命令执行移到服务端/房主
-   - 客户端只显示结果
-   - 真正的中心化管理
-
-## Table of Contents
-
-1. [Architecture Overview](#architecture-overview)
-2. [Message Flow](#message-flow)
-3. [Code Structure](#code-structure)
-4. [Command System](#command-system)
-5. [Extending Commands](#extending-commands)
-6. [Testing](#testing)
+### 2. 逻辑层 (`data/main.lua`)
+- **职责**：指令解析、权限校验、服务端播报、心跳维护。
+- **关键技术**：
+    - **OnTick 定时器**：使用 `MapMsg.OnTick` 配合本地变量实现 10s 循环。避免了 `Map.Delay` 被序列化进存档导致的多线程重影问题。
+    - **FactionAction 接收器**：注册 `CmdServerExec` 处理函数。这是跨越 UI 与仿真环境的唯一可靠通道。
+    - **私密回执**：使用 `Action.RunUI` 回调。该 API 确保执行结果仅发回给指令的发起玩家，且运行在正确的 UI 上下文中。
 
 ---
 
-## Architecture Overview
+## 🛠️ 开发规范 (Standards)
 
-The Command Console mod operates in two distinct Lua execution contexts:
+为了维持项目整洁，后续开发请遵循以下准则：
 
-### Layer 1: Simulation (Server-side)
-- **File**: `simulation/main.lua`
-- **Responsibility**: Command parsing, execution, and result generation
-- **Context**: Runs once on the server/host
-- **Key Hook**: Intercepts `UI.Run("OnReceivedChat", arg)` calls
-
-### Layer 2: UI (Client-side)
-- **File**: `ui/main.lua`
-- **Responsibility**: Filtering results by player and displaying locally
-- **Context**: Runs once per player client
-- **Key Hook**: Re-intercepts `UI.Run("OnReceivedChat", arg)` calls
-
-### Why Two Layers?
-
-In Desynced's architecture:
-- **Simulation** has access to all game state and Map API (server authority)
-- **UI** runs locally on each client and controls what's displayed
-
-**Problem**: If we only hook in Simulation, results are broadcasted globally.  
-**Solution**: Hook twice:
-1. Simulation: Execute command, mark result with `[CMD_RESULT:player_id]`
-2. UI: Detect marked messages, filter by `Game.IsLocalPlayer()`, only display locally
-
-This ensures:
-✅ Commands execute server-side (fair, authoritative)  
-✅ Results only visible to command sender (privacy)  
-✅ Normal chat unaffected (`[CMD_RESULT:]` prefix auto-tags)
-
----
-
-## Message Flow
-
-### Normal Chat Message Path
-
-```
-Player A types: "hello"
-         ↓
-    Chat.Text() [defined in game]
-         ↓
-    UI.Run("OnReceivedChat", {txt: "hello", player_id: 0})
-         ↓
-    [Simulation intercepts]
-    - Check: message starts with "/"? NO
-    - Pass through: return original_ui_run("OnReceivedChat", arg)
-         ↓
-    [UI intercepts]
-    - Check: starts with "[CMD_RESULT:"? NO
-    - Pass through: return original_ui_run("OnReceivedChat", arg)
-         ↓
-    UIMsg.OnReceivedChat(arg) [game's original handler]
-         ↓
-    TextChat displays: "[A] hello" (all players see it)
-```
-
-### Command Message Path
-
-```
-Player A types: "/test"
-         ↓
-    Chat.Text() [defined in game]
-         ↓
-    UI.Run("OnReceivedChat", {txt: "/test", player_id: 0})
-         ↓
-    [Simulation intercepts]
-    - Check: starts with "/"? YES
-    - Execute: execute_command("/test", 0)
-    - Get result: "测试命令已执行!"
-    - Tag result: {txt: "[CMD_RESULT:0] 测试命令已执行!", player_id: 0}
-    - Broadcast: return original_ui_run("OnReceivedChat", tagged_arg)
-         ↓
-    [UI intercepts]
-    - Check: starts with "[CMD_RESULT:"? YES
-    - Extract: target_player_id = 0, content = "测试命令已执行!"
-    - Filter: if Game.IsLocalPlayer(0)? YES (player A's client)
-    - Reformat: {txt: "[CMD] 测试命令已执行!", player_id: 0}
-    - Display: return original_ui_run("OnReceivedChat", reformatted_arg)
-         ↓
-    UIMsg.OnReceivedChat(arg) [game's original handler]
-         ↓
-    TextChat displays: "[系统] [CMD] 测试命令已执行!" (ONLY on Player A's screen)
-```
-
-### Same Command Message on Player B's Client
-
-```
-Message arrives on network: {txt: "[CMD_RESULT:0] 测试命令已执行!", player_id: 0}
-         ↓
-    [UI intercepts on Player B's client]
-    - Check: starts with "[CMD_RESULT:"? YES
-    - Extract: target_player_id = 0, content = "..."
-    - Filter: if Game.IsLocalPlayer(0)? NO (player B's ID is 1)
-    - Discard: return (empty return, message blocked)
-         ↓
-    [Message does NOT reach game's original handler]
-         ↓
-    TextChat displays: (nothing - message filtered out)
-```
-
----
-
-## Code Structure
-
-### simulation/main.lua (191 lines)
-
+### 1. 指令注册
+所有新指令必须在 `data/main.lua` 的 `commands` 表中注册，格式如下：
 ```lua
--- Configuration
-local config = { command_prefix = "/", debug_log = true }
-local commands = {}
-local output_buffer = {}
-
--- Utilities
-local function split_string(str, delimiter)     -- Parse "arg1 arg2 arg3" → {"arg1", "arg2", "arg3"}
-local function output_to_chat(message)          -- Buffer output message
-local function get_buffered_output()            -- Retrieve and clear buffer
-
--- Command System
-local function register_command(name, desc, args, handler)  -- Register a command
-local function show_help(cmd_name)              -- Display help
-local function execute_command(message, player_id)  -- Main dispatcher
-
--- Hook Layer
-local original_ui_run = UI.Run
-function UI.Run(func_name, ...)                 -- Intercept UI.Run calls
-    if func_name == "OnReceivedChat" then
-        -- Parse command vs normal chat
-        -- Execute if command
-        -- Return tagged result
-    end
-end
-
--- Command Definitions
-register_command("help", ..., handler_function)
-register_command("test", ..., handler_function)
-register_command("settings", ..., handler_function)
-register_command("info", ..., handler_function)
-```
-
-### ui/main.lua (41 lines)
-
-```lua
--- Hook Layer
-local original_ui_run = UI.Run
-
-function UI.Run(func_name, ...)
-    if func_name == "OnReceivedChat" then
-        -- Detect [CMD_RESULT:player_id] pattern
-        -- Check: is this for local player?
-        -- If yes: format and display
-        -- If no: block message (return early)
-    else
-        -- Pass other functions through
-    end
-end
-```
-
----
-
-## Command System
-
-### Command Registration
-
-Commands are registered using:
-
-```lua
-register_command(
-    "commandname",           -- name (no "/" prefix)
-    "Help description",      -- displayed in /help
-    "[optional args]",       -- argument description
-    function(args)           -- handler function
-        output_to_chat("Result message")
-    end
-)
-```
-
-### Handler Function Signature
-
-```lua
-function(args)
-    -- args is a table: args[1], args[2], etc.
-    -- Example: "/mycommand foo bar"
-    --          args = {"foo", "bar"}
-    
-    -- Output must use output_to_chat()
-    output_to_chat("Success!")
-end
-```
-
-### Command Execution Flow
-
-1. User types: `/help mycommand`
-2. Game calls: `Chat.Text({txt: "/help mycommand", player_id: X})`
-3. Our `UI.Run` intercepts
-4. Simulation layer:
-   - Extracts prefix: "/" → is command
-   - Splits args: ["help", "mycommand"]
-   - Looks up: `commands["help"]`
-   - Calls: `handler(["mycommand"])`
-   - Handler calls: `output_to_chat("...")`
-   - Messages buffer in `output_buffer[]`
-   - Joins with newlines: `"line1\nline2\nline3"`
-   - Tags: `"[CMD_RESULT:0] " .. result`
-   - Broadcasts via `UI.Run("OnReceivedChat", modified_arg)`
-5. UI layer:
-   - Detects `[CMD_RESULT:0]` tag
-   - Checks `Game.IsLocalPlayer(0)` → true
-   - Reformats to `"[CMD] " .. content`
-   - Calls original `UI.Run("OnReceivedChat", reformatted)`
-6. Game displays in chat
-
-### Error Handling
-
-Commands are wrapped in `pcall()`:
-
-```lua
-local success, error_msg = pcall(cmd.handler, cmd_args)
-if not success then
-    output_to_chat("执行出错: " .. tostring(error_msg))
-end
-```
-
-This prevents one broken command from crashing the entire system.
-
----
-
-## Extending Commands
-
-### Adding a Simple Command
-
-Edit `simulation/main.lua` and add before the initialization section:
-
-```lua
-register_command("echo", "Echo a message", "<text>", function(args)
-    if #args == 0 then
-        output_to_chat("Usage: /echo <text>")
-    else
-        local text = table.concat(args, " ")
-        output_to_chat("Echo: " .. text)
-    end
+register_command("name", "description", function(args, p_id)
+    -- 逻辑代码
+    return "反馈文本"
 end)
 ```
 
-### Adding a Command That Queries Game State
+### 2. 性能考量
+- 游戏的 TPS (Ticks Per Second) 稳定在 **5**。
+- 逻辑层中的 `print` 会直接输出到专用服务器的后台控制台，这是监控玩家活动的唯一手段。
 
-```lua
-register_command("daycount", "Show total days passed", "", function(args)
-    output_to_chat("Total days: " .. tostring(Map.GetTotalDays()))
-end)
-```
-
-### Adding a Command That Modifies State
-
-```lua
-register_command("pause", "Pause/unpause game", "", function(args)
-    Map.SetTimeDilation(0)  -- Example (actual API may differ)
-    output_to_chat("Game paused")
-end)
-```
-
-### Guidelines
-
-✅ **DO**
-- Use `output_to_chat()` for all output
-- Check argument count: `#args`
-- Validate inputs before using
-- Provide helpful error messages
-- Use `table.concat()` for multi-word args
-
-❌ **DON'T**
-- Use `print()` directly (goes to game log, not chat)
-- Assume arguments exist
-- Access `player_id` without being passed it
-- Modify global state without care
-- Create infinite loops or blocking operations
+### 3. 环境识别
+- 永远不要在包加载阶段（Main Chunk）调用 `Map.Delay`。
+- 只有在 `package:init()` 之后，仿真环境才算完全就绪。
 
 ---
 
-## Testing
-
-### Manual Testing Steps
-
-1. **Load game with mod enabled**
-2. **Test basic commands**:
-   ```
-   /help              → Should list all commands
-   /test              → Should output "测试命令已执行!"
-   /settings          → Should list map settings
-   /info              → Should show game info
-   ```
-3. **Test with multiple players**:
-   - Player A: `/test`
-   - Only Player A should see the result
-   - Player B should NOT see it in chat
-4. **Test normal chat still works**:
-   - Type: "hello world" (no `/`)
-   - All players should see it broadcasted
-
-### Debug Logging
-
-The mod outputs debug info if `config.debug_log = true` in `simulation/main.lua`:
-
-Look for log lines starting with:
-- `[CHAT-LOG]` - Chat input detection
-- `[CHAT-PASS]` - Normal chat messages
-- `[CMD-OUTPUT]` - Command output lines
-- `[CMD-EXECUTED]` - Command execution confirmation
-- `[CMD-UI]` - UI filtering decisions
-
-### Checking Mod is Loaded
-
-Look in game log for:
-```
-[CmdServerMod] 命令台模组已加载!
-[CmdServerMod] UI.Run 处理器已激活
-[CmdServerMod UI] UI模块已加载
-```
-
-If you don't see these, the mod didn't load (check game mod list).
+## 📅 未来路线 (Roadmap)
+- [ ] **Rank 权限分级**：实现 Admin 和 SuperAdmin 的等级划分。
+- [ ] **持久化管理**：将管理员名单保存至 `Map.GetSave()`。
+- [ ] **指令扩展**：增加 `/kick`, `/speed`, `/weather` 等实用服务器工具。
 
 ---
-
-## Implementation Details
-
-### Why `UI.Run` Hook Instead of Replacing Functions?
-
-Desynced's API doesn't allow direct replacement of `UIMsg.OnReceivedChat` (you'll get error: "Use UI.Run(...) to call bound UIMsg functions"). So we hook at the `UI.Run` level, which is the official way to intercept.
-
-### Message Tagging Strategy
-
-We use a simple prefix pattern `[CMD_RESULT:player_id]` because:
-- ✅ Easy to parse with regex
-- ✅ Won't conflict with normal chat (unusual pattern)
-- ✅ Visible if accidentally broadcast (debugging aid)
-- ✅ No special characters that break Lua strings
-
-### Multi-player Safety
-
-The `[CMD_RESULT:]` tag is crucial for multiplayer:
-1. Simulation broadcasts all results (server can't know which client will receive it)
-2. Each client receives all messages
-3. Each client's UI layer filters locally based on `player_id`
-4. Only the intended recipient displays it
-
-This is a standard multiplayer pattern (client-side filtering).
-
----
-
-## Future Improvements
-
-### Currently Planned (v1.1 - v2.0)
-- [ ] Implement `/set` command - Modify map settings (v1.1)
-- [ ] Add permission levels (admin-only commands) (v1.3)
-- [ ] Command aliases and shortcuts (v1.2)
-- [ ] Command history in chat memory (v2.0)
-
-### Architecture Considerations for Future
-- Consider moving command definitions to separate `commands/` directory for easier modular additions
-- May want a Lua config file for user-customizable commands
-- Consider persistent command history/logging to file
-- Permission system could use a simple role-based system (admin/user)
-
-### Known TODO in Code
-- Comment with "TODO:" marks in `simulation/main.lua` indicate placeholder command handlers ready for implementation
-
----
-
-## References
-
-- **Game Docs**: See `Desynced Lua API.html`, `Modding - Desynced Wiki.html`
-- **Command Registration**: `simulation/main.lua` lines ~120
-- **Message Filtering**: `ui/main.lua` lines ~20-30
-
-## Questions?
-
-See `CONTRIBUTING.md` for how to ask questions or report issues.
+*遵循 [AI_RULES.md](AI_RULES.md) 进行协作维护。*
